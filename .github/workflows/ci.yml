@@ -1,0 +1,66 @@
+name: CIT Campus Scheduling CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  backend-and-validation:
+    name: Backend Tests & Solver Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Run pytest test suite
+        run: |
+          pytest backend/tests/ -v
+
+      - name: Validate baseline schedule export
+        run: |
+          python validator.py --schedule exports/schedule.json --dataset data/cit_public.json
+
+      - name: Validate disruption rescheduled export
+        run: |
+          python validator.py --schedule exports/schedule_after.json --dataset data/cit_public.json --before exports/schedule.json --disruption data/sample_disruption.json
+
+      - name: Run end-to-end export verification script
+        run: |
+          python scripts/validate_export.py
+
+  frontend-build:
+    name: Frontend Lint & Production Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build frontend bundle
+        run: |
+          cd frontend
+          npm run build
