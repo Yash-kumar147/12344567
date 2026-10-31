@@ -67,8 +67,15 @@ async def lifespan(app: FastAPI):
             logger.info(f"Seeded demo account: {u['email']} [{u['role']}]")
 
     # Seed initial booking requests from cit_public.json
-    if os.path.exists("data/cit_public.json"):
-        with open("data/cit_public.json", "r", encoding="utf-8") as f:
+    data_path_candidates = [
+        "data/cit_public.json",
+        "backend/data/cit_public.json",
+        os.path.join(os.path.dirname(__file__), "..", "..", "data", "cit_public.json"),
+        os.path.join(os.path.dirname(__file__), "..", "data", "cit_public.json"),
+    ]
+    cit_data_file = next((p for p in data_path_candidates if os.path.exists(p)), None)
+    if cit_data_file:
+        with open(cit_data_file, "r", encoding="utf-8") as f:
             ds = json.load(f)
             b_col = db_manager.get_collection("bookings")
             count = await b_col.count_documents({})
@@ -77,7 +84,7 @@ async def lifespan(app: FastAPI):
                     b_doc = dict(b)
                     b_doc["requester_id"] = "USR_CLUB_01" if b["type"] == "club_event" else "USR_ADMIN_01"
                     await b_col.insert_one(b_doc)
-                logger.info("Seeded initial Spectra booking requests.")
+                logger.info(f"Seeded initial Spectra booking requests from {cit_data_file}.")
 
     yield
     # Shutdown

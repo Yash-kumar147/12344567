@@ -93,14 +93,27 @@ async def import_dataset(payload: dict, user: dict = Depends(require_role(["admi
     )
     return {"message": "Dataset imported successfully", "import_id": import_id}
 
+def load_default_cit_public() -> dict:
+    candidates = [
+        "data/cit_public.json",
+        "backend/data/cit_public.json",
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "cit_public.json"),
+        os.path.join(os.path.dirname(__file__), "..", "..", "data", "cit_public.json"),
+        os.path.join(os.path.dirname(__file__), "..", "data", "cit_public.json"),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            with open(c, "r", encoding="utf-8") as f:
+                return json.load(f)
+    return {}
+
 # 3. Schedules & Jobs
 @router.post("/schedules/generate", status_code=202)
 async def generate_schedule(user: dict = Depends(require_role(["admin", "coordinator"]))):
     app_state = await db_manager.get_collection("app_state").find_one({"key": "active_dataset"})
     if not app_state or "data" not in app_state:
         # Load default cit_public.json
-        with open("data/cit_public.json", "r", encoding="utf-8") as f:
-            dataset = json.load(f)
+        dataset = load_default_cit_public()
     else:
         dataset = app_state["data"]
 
@@ -207,8 +220,7 @@ async def get_schedule_by_version(version_id: str):
 # 4. Midsem Exams
 @router.post("/exams/generate")
 async def generate_exams(user: dict = Depends(require_role(["admin"]))):
-    with open("data/cit_public.json", "r", encoding="utf-8") as f:
-        dataset = json.load(f)
+    dataset = load_default_cit_public()
     status_str, exam_assignments = solve_midsem_exams(dataset)
     if not exam_assignments:
         raise HTTPException(status_code=400, detail=f"Exam solver failed: {status_str}")
@@ -236,8 +248,7 @@ async def create_booking(
     user: dict = Depends(get_current_user),
     idempotency_key: Optional[str] = Header(None)
 ):
-    with open("data/cit_public.json", "r", encoding="utf-8") as f:
-        dataset = json.load(f)
+    dataset = load_default_cit_public()
     
     res = await process_booking_request(req.model_dump(), user, dataset)
     if not res["success"] and res.get("status") == "rejected":
@@ -333,8 +344,7 @@ async def generate_disruption_proposal(id: str, user: dict = Depends(require_rol
     if not disruption:
         raise HTTPException(status_code=404, detail="Disruption not found")
 
-    with open("data/cit_public.json", "r", encoding="utf-8") as f:
-        dataset = json.load(f)
+    dataset = load_default_cit_public()
 
     # Active baseline
     with open("exports/schedule.json", "r", encoding="utf-8") as f:
@@ -408,8 +418,7 @@ async def approve_reschedule_proposal(id: str, req: ProposalApproveRequest, user
 # 8. Dashboard Summary
 @router.get("/dashboard/summary")
 async def get_dashboard_summary():
-    with open("data/cit_public.json", "r", encoding="utf-8") as f:
-        dataset = json.load(f)
+    dataset = load_default_cit_public()
 
     active_sched = await get_active_schedule()
     assignments = active_sched.get("assignments", [])
@@ -440,8 +449,7 @@ async def get_conflict_report(
     Access is strictly shared with Academic Administrator (Dean) and Deputy Coordinator only.
     """
     active_sched = await get_active_schedule()
-    with open("data/cit_public.json", "r", encoding="utf-8") as f:
-        dataset = json.load(f)
+    dataset = load_default_cit_public()
 
     try:
         import sys

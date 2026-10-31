@@ -1,0 +1,39 @@
+{
+  "id": "DISRUPT_001",
+  "version_id": "v1_published",
+  "description": "Week 7 unexpected campus disruptions: Faculty emergency leave and Room repair",
+  "disruptions": [
+    {
+      "type": "faculty_absence",
+      "faculty_id": "FAC03",
+      "faculty_name": "Dr. Rajesh Iyer",
+      "day": "Tuesday",
+      "periods": ["P2", "P3", "P4"],
+      "reason": "Emergency medical consultation"
+    },
+    {
+      "type": "room_closure",
+      "room_id": "CR101",
+      "room_name": "Classroom 101",
+      "day": "Thursday",
+      "periods": ["P6", "P7", "P8"],
+      "reason": "Ceiling repair and electrical work"
+    },
+    {
+      "type": "new_session",
+      "session": {
+        "id": "SES190_NEW",
+        "course_code": "CS305",
+        "faculty_ids": ["FAC15"],
+        "group_ids": ["Y3-CSE"],
+        "type": "lecture",
+        "duration": 1,
+        "room_type_required": "classroom",
+        "min_capacity": 60,
+        "needs_accessible": false
+      },
+      "reason": "Urgent guest briefing on Cyber Security regulations"
+    }
+  ]
+}
+

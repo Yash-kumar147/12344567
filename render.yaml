@@ -1,10 +1,10 @@
 services:
-  # 1. FastAPI Web Service
+  # FastAPI Backend Web Service
   - type: web
     name: cit-campus-api
-    runtime: docker
-    dockerfilePath: backend/Dockerfile
-    dockerContext: .
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     plan: free
     region: oregon
     healthCheckPath: /api/v1/health/ready
@@ -27,27 +27,3 @@ services:
         value: "2"
       - key: CORS_ORIGINS
         value: "http://localhost:5173"
-
-  # 2. Solver Background Worker (Optional: requires Render Starter/Paid plan)
-  # Uncomment below if you have a Render paid plan to run background job queues.
-  # On the free tier, the FastAPI Web Service handles scheduling and bookings directly.
-  # - type: worker
-  #   name: cit-campus-worker
-  #   runtime: docker
-  #   dockerfilePath: backend/Dockerfile
-  #   dockerContext: .
-  #   plan: starter
-  #   region: oregon
-  #   dockerCommand: python -m app.worker
-  #   envVars:
-  #     - key: ENVIRONMENT
-  #       value: production
-  #     - key: MONGODB_URI
-  #       sync: false
-  #     - key: MONGODB_DB_NAME
-  #       value: cit_scheduling
-  #     - key: SOLVER_TIME_LIMIT_SEC
-  #       value: "40"
-  #     - key: SOLVER_NUM_WORKERS
-  #       value: "2"
-
