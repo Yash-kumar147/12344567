@@ -1,6 +1,7 @@
 import { User, DashboardSummary, Booking, Proposal, Exam, Faculty, Room } from './types';
 
-const BASE_URL = '/api/v1';
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+const BASE_URL = API_BASE ? `${API_BASE}/api/v1` : '/api/v1';
 
 export async function loginApi(email: string, password: string): Promise<{ access_token: string; user: User }> {
   const res = await fetch(`${BASE_URL}/auth/login`, {
