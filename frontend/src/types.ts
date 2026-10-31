@@ -2,7 +2,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'coordinator' | 'faculty' | 'club_rep';
+  role: 'admin' | 'coordinator' | 'deputy_coordinator' | 'faculty' | 'club_rep';
   department?: string;
   faculty_id?: string;
 }
@@ -112,3 +112,4 @@ export interface DashboardSummary {
   has_conflicts: boolean;
   conflicts_count: number;
 }
+

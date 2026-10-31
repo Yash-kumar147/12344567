@@ -6,7 +6,7 @@ import json
 import pytest
 from app.rules.conflicts import find_violations
 from app.rules.time_grid import get_slot_periods, is_valid_start_period, LEGAL_STARTS_BY_DURATION
-from data.validator import validate_schedule
+from validator import validate_schedule
 
 @pytest.fixture
 def dataset():

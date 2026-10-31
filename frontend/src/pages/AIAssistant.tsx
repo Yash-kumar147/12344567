@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Bot, Send, Sparkles, AlertCircle, CheckCircle2, RefreshCw, MessageSquare } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Bot, Send, Sparkles, AlertCircle, CheckCircle2, RefreshCw, MessageSquare, Check, X } from 'lucide-react';
 import { parseBookingAi, createBooking } from '../api';
 
 interface Message {
@@ -18,6 +18,8 @@ export const AIAssistant: React.FC = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isAwaitingApproval, setIsAwaitingApproval] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const samplePrompts = [
     "Hume Spectra ke liye Friday ko 2 se 5 baje tak seminar hall chahiye, 100 students ke liye.",
@@ -25,10 +27,20 @@ export const AIAssistant: React.FC = () => {
     "Book Main Auditorium for 250 students on Tuesday P6 for Spectra Keynote."
   ];
 
+  // Task 4: Suggestions must be typed first in chatbox, then after user approval sent in chat
+  const handleSelectSuggestion = (promptText: string) => {
+    setInputText(promptText);
+    setIsAwaitingApproval(true);
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
   const handleSend = async (customPrompt?: string) => {
     const text = customPrompt || inputText;
     if (!text.trim()) return;
 
+    setIsAwaitingApproval(false);
     const userMsg: Message = { sender: 'user', text };
     setMessages(prev => [...prev, userMsg]);
     setInputText('');
@@ -134,37 +146,78 @@ export const AIAssistant: React.FC = () => {
         )}
       </div>
 
-      {/* Suggested chips */}
+      {/* Suggested chips (Task 4: clicked chip types into chatbox first for user review & approval) */}
       <div className="flex flex-wrap items-center gap-2 shrink-0">
-        <span className="text-[11px] text-muted">Suggestions:</span>
+        <span className="text-[11px] text-muted flex items-center gap-1 font-semibold">
+          <Sparkles className="w-3.5 h-3.5 text-brand" /> Suggestions:
+        </span>
         {samplePrompts.map((p, i) => (
           <button
             key={i}
-            onClick={() => handleSend(p)}
-            className="text-[11px] bg-white border border-line hover:border-brand hover:bg-teal-50/50 text-ink px-2.5 py-1 rounded-xl transition-colors"
+            onClick={() => handleSelectSuggestion(p)}
+            className="text-[11px] bg-white border border-line hover:border-brand hover:bg-teal-50/50 text-ink px-2.5 py-1 rounded-xl transition-all shadow-xs"
+            title="Click to paste into chatbox for review before sending"
           >
             {p.slice(0, 42)}...
           </button>
         ))}
       </div>
 
+      {/* Task 4 Approval Callout Banner when a suggestion is loaded into chatbox */}
+      {isAwaitingApproval && inputText.trim() && (
+        <div className="shrink-0 p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs flex items-center justify-between gap-2 text-amber-900 animate-in fade-in duration-150">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-amber-700 shrink-0" />
+            <span>
+              <strong>Suggestion Typed:</strong> Please review or edit in the box below. Click <strong>Approve & Send</strong> to submit.
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              setInputText('');
+              setIsAwaitingApproval(false);
+            }}
+            className="text-[11px] text-amber-700 hover:text-amber-900 font-semibold px-2 py-0.5 rounded hover:bg-amber-100"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* Input area */}
-      <div className="shrink-0 flex items-center gap-2 bg-card p-2 rounded-2xl border border-line shadow-sm">
+      <div className="shrink-0 flex items-center gap-2 bg-card p-2 rounded-2xl border border-line shadow-sm focus-within:border-brand transition-colors">
         <input
+          ref={inputRef}
           type="text"
           value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
+          onChange={(e) => {
+            setInputText(e.target.value);
+            if (!e.target.value) setIsAwaitingApproval(false);
+          }}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder="Ask in English or Hinglish (e.g. Hume Spectra ke liye Friday ko 2 se 5...)"
           className="flex-1 text-xs px-3 py-2 bg-transparent outline-none placeholder:text-muted"
         />
-        <button
-          onClick={() => handleSend()}
-          disabled={loading || !inputText.trim()}
-          className="p-2.5 bg-brand hover:bg-brand-dark text-white rounded-xl disabled:opacity-50 transition-colors shadow-sm"
-        >
-          <Send className="w-4 h-4" />
-        </button>
+
+        {isAwaitingApproval ? (
+          <button
+            onClick={() => handleSend()}
+            disabled={loading || !inputText.trim()}
+            className="px-4 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold transition-colors shadow-sm flex items-center gap-1.5"
+          >
+            <Check className="w-4 h-4" />
+            Approve & Send
+          </button>
+        ) : (
+          <button
+            onClick={() => handleSend()}
+            disabled={loading || !inputText.trim()}
+            className="p-2.5 bg-brand hover:bg-brand-dark text-white rounded-xl disabled:opacity-50 transition-colors shadow-sm"
+            title="Send Message"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </div>
   );

@@ -415,15 +415,20 @@ def validate_schedule(schedule_data: dict, dataset: dict, baseline_schedule: Opt
 
 def main():
     parser = argparse.ArgumentParser(description="Official Validator for CIT Campus Scheduling Platform")
-    parser.add_argument("schedule", help="Path to generated schedule.json")
-    parser.add_argument("dataset", nargs="?", default="data/cit_public.json", help="Path to cit_public.json")
+    parser.add_argument("pos_schedule", nargs="?", default=None, help="Path to generated schedule.json")
+    parser.add_argument("pos_dataset", nargs="?", default=None, help="Path to cit_public.json")
+    parser.add_argument("--schedule", dest="opt_schedule", default=None, help="Path to generated schedule.json")
+    parser.add_argument("--dataset", dest="opt_dataset", default=None, help="Path to cit_public.json")
     parser.add_argument("--before", dest="baseline", default=None, help="Path to baseline schedule.json for diff validation")
     parser.add_argument("--disruption", dest="disruption", default=None, help="Path to disruption.json for disruption validation")
     args = parser.parse_args()
 
-    with open(args.schedule, "r", encoding="utf-8") as f:
+    schedule_path = args.opt_schedule or args.pos_schedule or "exports/schedule.json"
+    dataset_path = args.opt_dataset or args.pos_dataset or "data/cit_public.json"
+
+    with open(schedule_path, "r", encoding="utf-8") as f:
         schedule_data = json.load(f)
-    with open(args.dataset, "r", encoding="utf-8") as f:
+    with open(dataset_path, "r", encoding="utf-8") as f:
         dataset_data = json.load(f)
 
     baseline_data = None

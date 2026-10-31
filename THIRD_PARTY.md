@@ -40,3 +40,4 @@ All third-party open-source packages utilized in the Chilika Institute of Techno
 ## 3. External Web Fonts & Assets
 - **Inter Font:** Designed by Rasmus Andersson (SIL Open Font License 1.1), hosted via Google Fonts.
 - **CIT Vector Mark:** Custom SVG embedded directly in application source.
+

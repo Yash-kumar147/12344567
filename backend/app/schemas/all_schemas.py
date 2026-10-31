@@ -66,3 +66,29 @@ class ProposalApproveRequest(BaseModel):
 class DemoResetRequest(BaseModel):
     confirmation: str # Must be "RESET_DEMO_DATA"
 
+# Timetable & Faculty Schemas
+class TimetableModifyRequest(BaseModel):
+    session_id: str
+    day: str
+    start_period: str
+    room_id: str
+    reason: Optional[str] = "Timetable modified by academic authority"
+
+class FacultyUnavailabilityRequest(BaseModel):
+    day: str
+    period: str
+    is_unavailable: bool = True
+    reason: Optional[str] = "Marked unavailable by administrator"
+
+class ScheduleChangeRequestCreate(BaseModel):
+    session_id: str
+    course_code: Optional[str] = None
+    requested_day: str
+    requested_period: str
+    requested_room_id: Optional[str] = None
+    reason: str
+
+class ScheduleChangeDecisionRequest(BaseModel):
+    decision: str # "approve", "reject"
+    reason: Optional[str] = None
+

@@ -227,10 +227,14 @@ export const Bookings: React.FC = () => {
                     <option value="P2">P2 (09:00 - 10:00)</option>
                     <option value="P3">P3 (10:00 - 11:00)</option>
                     <option value="P4">P4 (11:00 - 12:00)</option>
-                    <option value="P6">P6 (13:00 - 14:00)</option>
-                    <option value="P7">P7 (14:00 - 15:00)</option>
-                    <option value="P8">P8 (15:00 - 16:00)</option>
-                    <option value="P9">P9 (16:00 - 17:00)</option>
+                    <option value="P6">P6 (14:00 - 15:00)</option>
+                    <option value="P7">P7 (15:00 - 16:00)</option>
+                    <option value="P8">P8 (16:00 - 17:00)</option>
+                    <option value="P9">P9 (17:00 - 18:00)</option>
+                    <option value="P10">P10 (18:00 - 19:00) [Events Only Slot]</option>
+                    <option value="P11">P11 (19:00 - 20:00) [Events Only Slot]</option>
+                    <option value="P12">P12 (20:00 - 21:00) [Events Only Slot]</option>
+                    <option value="P13">P13 (21:00 - 22:00) [Events Only Slot]</option>
                   </select>
                 </div>
 
@@ -246,6 +250,21 @@ export const Bookings: React.FC = () => {
                   />
                 </div>
               </div>
+
+              {/* Task 2: Live Venue Availability Status Indicator */}
+              {bookingsList.some(b => b.room_id === roomId && b.day === day && b.start_period === startPeriod && b.status !== 'rejected') ? (
+                <div className="p-3 rounded-xl bg-bad-bg border border-red-300 text-bad-text text-xs flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-bad-text" />
+                  <span>
+                    <strong>Venue Unavailable:</strong> Another user has already requested or booked <strong>{roomId}</strong> for <strong>{day} {startPeriod}</strong>. Submitting will show alternatives.
+                  </span>
+                </div>
+              ) : (
+                <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] flex items-center gap-1.5 font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Venue {roomId} appears open for {day} {startPeriod}</span>
+                </div>
+              )}
 
               <div>
                 <label className="block text-muted font-medium mb-1">Expected Attendance</label>
@@ -274,19 +293,28 @@ export const Bookings: React.FC = () => {
           {/* Decision Card */}
           {decisionResult && (
             <div className={`p-5 rounded-2xl border shadow-sm ${
-              decisionResult.success ? 'bg-ok-bg/30 border-teal-200' : 'bg-bad-bg/30 border-red-200'
+              decisionResult.success ? 'bg-ok-bg/30 border-teal-200' : 'bg-red-50/80 border-red-200'
             }`}>
               <div className="flex items-center gap-2">
                 {decisionResult.success ? (
-                  <CheckCircle2 className="w-5 h-5 text-ok-text" />
+                  <CheckCircle2 className="w-5 h-5 text-ok-text shrink-0" />
                 ) : (
-                  <XCircle className="w-5 h-5 text-bad-text" />
+                  <XCircle className="w-5 h-5 text-bad-text shrink-0" />
                 )}
-                <h3 className="font-bold text-sm text-ink">
-                  {decisionResult.success ? 'Request Accepted' : 'Booking Blocked / Conflict Detected'}
-                </h3>
+                <div>
+                  <h3 className="font-bold text-sm text-ink">
+                    {decisionResult.success 
+                      ? (decisionResult.status === 'pending' ? 'Request Submitted (Awaiting Admin Approval)' : 'Booking Approved')
+                      : 'Venue Unavailable'}
+                  </h3>
+                  {!decisionResult.success && (
+                    <span className="text-[10px] font-bold text-bad-text bg-bad-bg px-2 py-0.5 rounded-full inline-block mt-0.5">
+                      SLOT OCCUPIED / ANOTHER USER ALREADY REQUESTED
+                    </span>
+                  )}
+                </div>
               </div>
-              <p className="text-xs text-muted mt-1.5">
+              <p className="text-xs text-muted mt-2 font-medium">
                 {decisionResult.message || decisionResult.reason}
               </p>
 
@@ -297,11 +325,22 @@ export const Bookings: React.FC = () => {
                   <div className="space-y-2">
                     {decisionResult.alternatives.map((alt: any, i: number) => (
                       <div key={i} className="p-3 bg-card rounded-xl border border-line text-xs">
-                        <div className="font-bold text-brand flex items-center gap-1.5">
+                        <div className="font-bold text-brand flex items-center justify-between">
                           <span>Option {i + 1}: {alt.room_name || alt.room_id}</span>
                           <span className="text-[10px] text-muted">({alt.day} {alt.start_period})</span>
                         </div>
                         <p className="text-muted mt-0.5 text-[11px]">{alt.reason}</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (alt.room_id) setRoomId(alt.room_id);
+                            if (alt.day) setDay(alt.day);
+                            if (alt.start_period) setStartPeriod(alt.start_period);
+                          }}
+                          className="mt-2 text-[11px] font-bold text-brand hover:underline flex items-center gap-1"
+                        >
+                          Select this alternative
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -350,3 +389,4 @@ export const Bookings: React.FC = () => {
     </div>
   );
 };
+

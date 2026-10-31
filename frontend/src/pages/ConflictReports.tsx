@@ -1,13 +1,62 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, CheckCircle2, AlertTriangle, FileCode, 
-  RefreshCw, Check, ArrowRight, Download, Terminal, Info 
+  RefreshCw, Check, ArrowRight, Download, Terminal, Info,
+  Lock, ArrowLeft, Shield
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { getConflictReport } from '../api';
 
 export const ConflictReports: React.FC = () => {
+  const { user, token } = useAuth();
   const [isRunning, setIsRunning] = useState(false);
   const [lastVerified, setLastVerified] = useState<string>('Just now');
   const [activeTab, setActiveTab] = useState<'hard' | 'soft' | 'cli'>('hard');
+  const [reportData, setReportData] = useState<any>(null);
+
+  const isAuthorized = user?.role === 'admin' || user?.role === 'coordinator' || user?.role === 'deputy_coordinator';
+
+  useEffect(() => {
+    if (isAuthorized) {
+      getConflictReport(token || undefined)
+        .then(setReportData)
+        .catch(() => {});
+    }
+  }, [token, isAuthorized]);
+
+  // If not authorized, show access restricted view
+  if (!isAuthorized) {
+    return (
+      <div className="max-w-xl mx-auto mt-16 bg-card p-8 rounded-3xl border border-line text-center shadow-sm space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
+          <Lock className="w-8 h-8" />
+        </div>
+        <div>
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200 inline-block mb-2">
+            Restricted Access
+          </span>
+          <h2 className="text-xl font-bold text-ink">Access Restricted</h2>
+          <p className="text-xs text-muted mt-2 max-w-sm mx-auto leading-relaxed">
+            Constraint & Conflict Reports are privileged academic audit documents shared strictly with the <strong className="text-ink">Academic Administrator (Dean)</strong> and <strong className="text-ink">Deputy Coordinator</strong> only.
+          </p>
+          <div className="mt-4 p-3 rounded-xl bg-page text-[11px] text-muted text-left border border-line space-y-1">
+            <div className="font-semibold text-ink">Your Current Account:</div>
+            <div>Name: {user?.name || 'User'}</div>
+            <div>Role: <span className="font-mono uppercase font-bold text-brand">{user?.role || 'Guest'}</span></div>
+          </div>
+        </div>
+        <div className="pt-2">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 bg-brand text-white px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-brand-dark transition-colors shadow-sm"
+          >
+            <ArrowLeft className="w-4 h-4" /> Return to Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const hardRules = [
     {
@@ -141,6 +190,9 @@ export const ConflictReports: React.FC = () => {
             <h1 className="text-2xl font-bold tracking-tight text-ink">Constraint & Conflict Verification</h1>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-ok-bg text-ok-text border border-emerald-200">
               0 Hard Violations
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-brand border border-teal-200 flex items-center gap-1">
+              <Shield className="w-3 h-3" /> Shared with Admin & Deputy Coordinator only
             </span>
           </div>
           <p className="text-sm text-muted mt-1">
@@ -328,3 +380,4 @@ SOFT PENALTY SCORE: 26.0
     </div>
   );
 };
+

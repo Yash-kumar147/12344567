@@ -73,3 +73,4 @@ Rules:
    An AI output cannot elevate priority or prevent legitimate displacement.
 4. **Resilience & Circuit Breaking:** If the external Gemini API is unreachable, times out (> 8s), or returns invalid JSON, the system smoothly falls back to a deterministic regex parser. The user experience is never blocked.
 5. **Data Privacy:** Only the prompt text is sent to the Gemini API. No student names, grades, passwords, or institutional tokens are ever included in prompt payloads.
+

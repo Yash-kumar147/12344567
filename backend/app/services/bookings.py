@@ -11,6 +11,7 @@ Enforces:
 
 from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime, timezone
+import uuid
 from fastapi import HTTPException
 from app.db.mongo import db_manager
 from app.rules.priority import DEFAULT_PRIORITY_ORDER, can_displace, get_priority_rank
@@ -39,18 +40,32 @@ async def check_booking_conflicts(
     for p in periods:
         occ = await occ_col.find_one({"room_id": room_id, "day": day, "period": p})
         if occ:
-            return True, f"Regular class '{occ.get('session_id')}' ({occ.get('course_name', 'Class')}) is scheduled in {room_id} at {day} {p}.", {"type": "regular_class", "id": occ.get("session_id")}
+            return True, f"Venue {room_id} is unavailable: Regular class '{occ.get('session_id')}' ({occ.get('course_name', 'Class')}) is scheduled at {day} {p}.", {"type": "regular_class", "id": occ.get("session_id")}
 
-    # 2. Check approved bookings
+    # 2. Check approved bookings from room_slots
     slots_col = db_manager.get_collection("room_slots")
+    bookings_col = db_manager.get_collection("bookings")
     for p in periods:
         slot_claim = await slots_col.find_one({"room_id": room_id, "date": day, "period": p})
         if slot_claim:
-            # Found existing booking claim
             existing_booking_id = slot_claim.get("booking_id")
-            bookings_col = db_manager.get_collection("bookings")
             existing_b = await bookings_col.find_one({"id": existing_booking_id})
-            return True, f"Slot {day} {p} is already booked for '{existing_b.get('title') if existing_b else existing_booking_id}'.", existing_b
+            title = existing_b.get('title') if existing_b else existing_booking_id
+            requester = existing_b.get("requester_name", "Another user") if existing_b else "Another user"
+            return True, f"Venue {room_id} is unavailable on {day} ({p}): Another user ({requester}) has already booked this venue for '{title}'.", existing_b
+
+    # 3. Check other existing requests (including pending requests) for the same venue, date and time
+    pending_bookings = await bookings_col.find({
+        "room_id": room_id,
+        "day": day,
+        "status": "pending"
+    }).to_list(100)
+    for pb in pending_bookings:
+        pb_periods = get_slot_periods(pb.get("start_period", "P1"), pb.get("duration", 1))
+        for p in periods:
+            if p in pb_periods:
+                req_by = pb.get("requester_name") or pb.get("requester_id") or "Another user"
+                return True, f"Venue {room_id} is unavailable on {day} ({p}): Another user ({req_by}) has already requested this venue for the same date and time ('{pb.get('title')}').", pb
 
     return False, None, None
 
@@ -138,7 +153,7 @@ async def process_booking_request(booking_req: dict, user: dict, dataset: dict) 
         room_id, day, start_p, duration, attendance, priority
     )
 
-    booking_id = f"BK_{datetime.now(timezone.utc).strftime('%m%d%H%M%S')}_{user.get('id', 'usr')[:4]}"
+    booking_id = f"BK_{datetime.now(timezone.utc).strftime('%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
 
     if not is_blocked:
         # Check auto-approve vs pending policy:
@@ -244,6 +259,7 @@ async def process_booking_request(booking_req: dict, user: dict, dataset: dict) 
         return {
             "success": False,
             "status": "rejected",
+            "unavailable": True,
             "reason": clash_reason,
             "alternatives": alts
         }

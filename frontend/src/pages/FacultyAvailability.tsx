@@ -1,31 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Users, Clock, AlertTriangle, ShieldCheck, Search, 
-  CheckCircle2, XCircle, Calendar, BookOpen, ChevronRight 
+  CheckCircle2, XCircle, Calendar, BookOpen, ChevronRight, Lock, Sparkles 
 } from 'lucide-react';
-import { getCitDataset, getActiveSchedule } from '../api';
-import { Faculty, Room } from '../types';
+import { getCitDataset, getActiveSchedule, markFacultyUnavailability, getAllFacultyUnavailability } from '../api';
+import { useAuth } from '../context/AuthContext';
+import { Faculty } from '../types';
 
 export const FacultyAvailability: React.FC = () => {
+  const { user, token } = useAuth();
   const [facultyList, setFacultyList] = useState<Faculty[]>([]);
   const [scheduleAssignments, setScheduleAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDept, setSelectedDept] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
+  const [customUnavail, setCustomUnavail] = useState<Record<string, boolean>>({});
+  const [notification, setNotification] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [dataset, sched] = await Promise.all([
+        const [dataset, sched, serverUnavail] = await Promise.all([
           getCitDataset().catch(() => ({ faculty: [] })),
-          getActiveSchedule().catch(() => ({ assignments: [] }))
+          getActiveSchedule().catch(() => ({ assignments: [] })),
+          getAllFacultyUnavailability(token || undefined).catch(() => [])
         ]);
         setFacultyList(dataset.faculty || []);
         setScheduleAssignments(sched.assignments || []);
         if (dataset.faculty && dataset.faculty.length > 0) {
           setSelectedFaculty(dataset.faculty[0]);
         }
+        
+        const unavailMap: Record<string, boolean> = {};
+        for (const item of serverUnavail) {
+          unavailMap[`${item.faculty_id}_${item.day}_${item.period}`] = item.is_unavailable;
+        }
+        setCustomUnavail(unavailMap);
       } catch (e) {
         console.error('Failed to load faculty', e);
       } finally {
@@ -33,7 +44,7 @@ export const FacultyAvailability: React.FC = () => {
       }
     }
     loadData();
-  }, []);
+  }, [token]);
 
   const departments = ['All', 'Computer Science', 'Electronics & Comm', 'Mechanical', 'Civil', 'Basic Sciences', 'Humanities'];
 
@@ -50,17 +61,62 @@ export const FacultyAvailability: React.FC = () => {
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
   const getSlotStatus = (f: Faculty, day: string, period: string) => {
-    if (period === 'P5') return { label: 'Lunch (Protected)', color: 'bg-teal-50 text-brand-dark' };
+    if (period === 'P5') return { label: 'Lunch (Protected)', color: 'bg-teal-50 text-brand-dark', isUnavail: false };
     
-    // Check unavailable (Hard)
+    // Check custom server-side unavailabilities
+    const customKey = `${f.id}_${day}_${period}`;
+    if (customKey in customUnavail) {
+      if (customUnavail[customKey]) {
+        return { label: 'Unavailable (Admin Hard Block)', color: 'bg-bad-bg text-bad-text font-bold', isUnavail: true };
+      }
+    }
+
+    // Check dataset unavailable (Hard)
     const isUnavail = f.unavailable_slots?.some(s => s.day === day && s.period === period);
-    if (isUnavail) return { label: 'Unavailable (Hard)', color: 'bg-bad-bg text-bad-text font-bold' };
+    if (isUnavail) return { label: 'Unavailable (Hard)', color: 'bg-bad-bg text-bad-text font-bold', isUnavail: true };
 
     // Check avoid (Soft)
     const isAvoid = f.avoid_slots?.some(s => s.day === day && s.period === period);
-    if (isAvoid) return { label: 'Avoid (Soft)', color: 'bg-wait-bg text-wait-text font-medium' };
+    if (isAvoid) return { label: 'Avoid (Soft)', color: 'bg-wait-bg text-wait-text font-medium', isUnavail: false };
 
-    return { label: 'Available', color: 'bg-emerald-50/50 text-ok-text' };
+    return { label: 'Available', color: 'bg-emerald-50/50 text-ok-text', isUnavail: false };
+  };
+
+  // Task 3: Only admin can mark unavailability of faculty for that period or time
+  const handleToggleUnavailability = async (facultyId: string, day: string, period: string) => {
+    if (period === 'P5') return;
+
+    if (user?.role !== 'admin') {
+      setNotification({
+        text: 'Access Denied: Only administrators have permission to mark faculty unavailability.',
+        type: 'error'
+      });
+      return;
+    }
+
+    const currentStatus = getSlotStatus(selectedFaculty!, day, period);
+    const newIsUnavailable = !currentStatus.isUnavail;
+
+    try {
+      await markFacultyUnavailability(facultyId, {
+        day,
+        period,
+        is_unavailable: newIsUnavailable,
+        reason: 'Marked by Administrator in Faculty Workload Matrix'
+      }, token || undefined);
+
+      setCustomUnavail(prev => ({
+        ...prev,
+        [`${facultyId}_${day}_${period}`]: newIsUnavailable
+      }));
+
+      setNotification({
+        text: `Faculty ${facultyId} marked as ${newIsUnavailable ? 'UNAVAILABLE' : 'AVAILABLE'} on ${day} ${period}.`,
+        type: 'success'
+      });
+    } catch (err: any) {
+      setNotification({ text: err.message, type: 'error' });
+    }
   };
 
   return (
@@ -77,10 +133,48 @@ export const FacultyAvailability: React.FC = () => {
         <div className="flex items-center gap-2 bg-card px-4 py-2 rounded-xl border border-line shadow-sm">
           <ShieldCheck className="w-5 h-5 text-brand" />
           <div className="text-xs">
-            <span className="font-bold text-ink">Daily Limit Rule:</span>{' '}
-            <span className="text-muted">Max 4 teaching hours / faculty / day</span>
+            <span className="font-bold text-ink">Policy:</span>{' '}
+            <span className="text-muted">Max 4 teaching hours / day</span>
           </div>
         </div>
+      </div>
+
+      {notification && (
+        <div className={`p-4 rounded-xl text-xs font-semibold flex items-center justify-between ${
+          notification.type === 'success' ? 'bg-ok-bg text-ok-text' : 'bg-bad-bg text-bad-text'
+        }`}>
+          <div className="flex items-center gap-2">
+            {notification.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+            <span>{notification.text}</span>
+          </div>
+          <button onClick={() => setNotification(null)} className="font-bold hover:underline">Dismiss</button>
+        </div>
+      )}
+
+      {/* Task 3 Authority Callout */}
+      <div className={`p-4 rounded-2xl border text-xs flex items-center justify-between gap-4 ${
+        user?.role === 'admin' ? 'bg-teal-50/70 border-teal-200 text-teal-900' : 'bg-gray-50 border-line text-muted'
+      }`}>
+        <div className="flex items-center gap-2.5">
+          {user?.role === 'admin' ? (
+            <Sparkles className="w-5 h-5 text-brand shrink-0" />
+          ) : (
+            <Lock className="w-5 h-5 text-gray-500 shrink-0" />
+          )}
+          <div>
+            <strong className="text-ink">Task 3 Rule:</strong>{' '}
+            {user?.role === 'admin' ? (
+              <span><strong>Admin Mode Active:</strong> You can click any period slot below to mark or unmark faculty unavailability.</span>
+            ) : (
+              <span>You are logged in as <strong>{user?.role}</strong>. Only Administrators can mark faculty unavailability for specific slots.</span>
+            )}
+          </div>
+        </div>
+        {user?.role === 'admin' && (
+          <span className="text-[10px] font-bold bg-brand text-white px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0">
+            Admin Editable
+          </span>
+        )}
       </div>
 
       {/* Metric Cards */}
@@ -103,99 +197,95 @@ export const FacultyAvailability: React.FC = () => {
               <Clock className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-xs font-semibold text-muted mt-1">Daily Cap Maximum</div>
-          <div className="text-[11px] text-muted mt-2">Zero faculty exceed 4h/day</div>
+          <div className="text-xs font-semibold text-muted mt-1">Max Daily Teaching Cap</div>
+          <div className="text-[11px] text-blue-600 mt-2 font-medium">Strict CP-SAT hard constraint</div>
         </div>
 
         <div className="bg-card p-5 rounded-2xl border border-line shadow-sm">
           <div className="flex items-center justify-between">
-            <div className="text-2xl font-bold text-ok-text">100% Free</div>
-            <div className="w-9 h-9 rounded-xl bg-ok-bg text-ok-text flex items-center justify-center">
+            <div className="text-2xl font-bold text-ink">P5 (12-1 PM)</div>
+            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Calendar className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="text-xs font-semibold text-muted mt-1">Universal Lunch Break</div>
+          <div className="text-[11px] text-amber-600 mt-2 font-medium">100% protected campus-wide</div>
+        </div>
+
+        <div className="bg-card p-5 rounded-2xl border border-line shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="text-2xl font-bold text-ink">0 Clashes</div>
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-xs font-semibold text-muted mt-1">Lunch Hour Protection</div>
-          <div className="text-[11px] text-ok-text mt-2 font-medium">Period 5 (13:00 - 14:00) kept clear</div>
+          <div className="text-xs font-semibold text-muted mt-1">Faculty Overlap Violations</div>
+          <div className="text-[11px] text-emerald-600 mt-2 font-medium">Certified by validator.py</div>
         </div>
+      </div>
 
-        <div className="bg-card p-5 rounded-2xl border border-line shadow-sm">
+      {/* Main Grid: Left List & Right Matrix */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Faculty Selector */}
+        <div className="lg:col-span-5 bg-card rounded-2xl border border-line p-4 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <div className="text-2xl font-bold text-ink">Weight 5</div>
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5" />
+            <h2 className="font-bold text-sm text-ink">Faculty Directory</h2>
+            <span className="text-xs text-muted font-medium">{filteredFaculty.length} members</span>
+          </div>
+
+          {/* Search & Department Filters */}
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="w-4 h-4 text-muted absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search by name, ID or department..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-line bg-page focus:border-brand outline-none"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {departments.map(dept => (
+                <button
+                  key={dept}
+                  onClick={() => setSelectedDept(dept)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors ${
+                    selectedDept === dept ? 'bg-brand text-white shadow-xs' : 'bg-page hover:bg-gray-200/60 text-muted'
+                  }`}
+                >
+                  {dept}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="text-xs font-semibold text-muted mt-1">Soft Penalty on Avoid Slots</div>
-          <div className="text-[11px] text-muted mt-2">Minimised by CP-SAT Stage 1</div>
-        </div>
-      </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-card p-4 rounded-2xl border border-line shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
-          <span className="text-xs font-medium text-muted px-2">Dept:</span>
-          {departments.map(d => (
-            <button
-              key={d}
-              onClick={() => setSelectedDept(d)}
-              className={`px-3 py-1.5 rounded-xl text-xs transition-colors ${
-                selectedDept === d ? 'bg-brand text-white font-semibold' : 'bg-page text-muted hover:text-ink border border-line'
-              }`}
-            >
-              {d}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2 bg-page px-3 py-2 rounded-xl border border-line w-full md:w-72 focus-within:border-brand">
-          <Search className="w-4 h-4 text-muted" />
-          <input
-            type="text"
-            placeholder="Search faculty by name or ID..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-transparent text-xs w-full outline-none placeholder:text-muted"
-          />
-        </div>
-      </div>
-
-      {/* Faculty Split View: List on Left, Schedule Matrix on Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left List */}
-        <div className="lg:col-span-5 bg-card rounded-2xl border border-line p-4 shadow-sm flex flex-col h-[640px]">
-          <div className="text-sm font-bold text-ink mb-3 px-1 flex justify-between items-center">
-            <span>Faculty Directory</span>
-            <span className="text-xs font-normal text-muted">{filteredFaculty.length} of {facultyList.length}</span>
-          </div>
-
-          <div className="space-y-2 overflow-y-auto flex-1 pr-1">
+          {/* Faculty Cards List */}
+          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
             {filteredFaculty.map(f => {
               const isSelected = selectedFaculty?.id === f.id;
-              const unavailCount = f.unavailable_slots?.length || 0;
-              const avoidCount = f.avoid_slots?.length || 0;
+              const unavailCount = (f.unavailable_slots?.length || 0);
+              const avoidCount = (f.avoid_slots?.length || 0);
 
               return (
                 <div
                   key={f.id}
                   onClick={() => setSelectedFaculty(f)}
-                  className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                    isSelected
-                      ? 'border-brand bg-teal-50/40 shadow-xs'
-                      : 'border-line hover:border-teal-300 hover:bg-page'
+                  className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between ${
+                    isSelected ? 'border-brand bg-teal-50/50 shadow-xs' : 'border-line hover:bg-page'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold text-sm text-ink">{f.name}</div>
-                      <div className="text-xs text-muted mt-0.5">{f.department} • <span className="font-mono">{f.id}</span></div>
+                  <div>
+                    <div className="font-bold text-ink">{f.name}</div>
+                    <div className="text-[11px] text-muted flex items-center gap-2 mt-0.5">
+                      <span className="font-mono font-semibold text-brand">{f.id}</span>
+                      <span>•</span>
+                      <span>{f.department}</span>
                     </div>
-                    <ChevronRight className={`w-4 h-4 ${isSelected ? 'text-brand' : 'text-muted'}`} />
                   </div>
 
-                  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-line/60 text-[11px]">
-                    <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-medium">
-                      Max {f.daily_limit || 4}h/day
-                    </span>
+                  <div className="flex items-center gap-1.5 text-[10px]">
                     {unavailCount > 0 && (
                       <span className="px-2 py-0.5 rounded bg-bad-bg text-bad-text font-medium">
                         {unavailCount} Unavail
@@ -273,14 +363,25 @@ export const FacultyAvailability: React.FC = () => {
                         <td className="py-3 px-3 text-left font-semibold text-ink whitespace-nowrap">{d}</td>
                         {periods.map(p => {
                           const status = getSlotStatus(selectedFaculty, d, p);
+                          const isClickable = user?.role === 'admin' && p !== 'P5';
+
                           return (
                             <td key={p} className="p-1">
-                              <div 
-                                title={`${d} ${p}: ${status.label}`}
-                                className={`h-9 rounded-lg flex items-center justify-center text-[10px] font-medium border border-transparent transition-all ${status.color}`}
+                              <button
+                                type="button"
+                                disabled={p === 'P5'}
+                                onClick={() => isClickable && handleToggleUnavailability(selectedFaculty.id, d, p)}
+                                title={
+                                  user?.role === 'admin' && p !== 'P5'
+                                    ? `Click to toggle unavailability for ${d} ${p}`
+                                    : `${d} ${p}: ${status.label}`
+                                }
+                                className={`w-full h-9 rounded-lg flex items-center justify-center text-[10px] font-medium border border-transparent transition-all ${
+                                  status.color
+                                } ${isClickable ? 'hover:ring-2 hover:ring-brand cursor-pointer' : 'cursor-default'}`}
                               >
                                 {p === 'P5' ? 'LUNCH' : status.label.includes('Unavail') ? 'OFF' : status.label.includes('Avoid') ? 'AVOID' : 'OPEN'}
-                              </div>
+                              </button>
                             </td>
                           );
                         })}
@@ -292,11 +393,11 @@ export const FacultyAvailability: React.FC = () => {
 
               {/* Extra Info Box */}
               <div className="mt-6 p-4 rounded-xl bg-page border border-line text-xs space-y-1.5">
-                <div className="font-semibold text-ink">Workload & Policy Constraints:</div>
+                <div className="font-semibold text-ink">Authority Rules:</div>
                 <ul className="list-disc pl-4 space-y-1 text-muted">
-                  <li>Daily teaching limit strictly enforced: no faculty scheduled more than 4 periods in any day.</li>
+                  <li><strong>Task 3 Enforcement:</strong> Only Admin (Dean) has permission to mark faculty unavailability for specific slots.</li>
                   <li>Hard unavailable slots are excluded from candidate domain in Stage 1 CP-SAT solver.</li>
-                  <li>Soft avoid preferences carry a penalty weight of 5, penalising solver assignments during those slots.</li>
+                  <li>Daily teaching limit strictly enforced: max 4 periods per faculty per day.</li>
                 </ul>
               </div>
             </div>

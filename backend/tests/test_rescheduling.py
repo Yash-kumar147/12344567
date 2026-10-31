@@ -9,7 +9,7 @@ Tests for Disruption Rescheduling:
 import json
 import pytest
 from app.solver.reschedule import solve_reschedule
-from data.validator import validate_schedule
+from validator import validate_schedule
 
 @pytest.fixture
 def dataset():

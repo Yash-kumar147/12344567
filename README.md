@@ -370,3 +370,4 @@ pytest backend/tests/ -v
 
 ## 10. License
 Developed for the **Chilika Institute of Technology (CIT)**. Open-source educational platform available under the [MIT License](LICENSE).
+

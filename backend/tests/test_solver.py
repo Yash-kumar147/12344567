@@ -7,7 +7,7 @@ import json
 import pytest
 from app.solver.engine import SchedulingEngine
 from app.solver.exams import solve_midsem_exams
-from data.validator import validate_schedule
+from validator import validate_schedule
 
 @pytest.fixture
 def dataset():
